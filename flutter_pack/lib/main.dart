@@ -8,6 +8,7 @@ import 'local_store.dart';
 import 'profile_panel.dart';
 import 'route_service.dart';
 import 'transit_service.dart';
+import 'demo_dispatch.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -71,10 +72,42 @@ class _HomeScreenState extends State<HomeScreen> {
   int routeGeneration = 0;
   Timer? routeTimer;
   bool saving = false;
+  bool panelsAway = false;
+  Timer? panelTimer;
+
+  void mapGesture() {
+    panelTimer?.cancel();
+    if (!panelsAway) setState(() => panelsAway = true);
+    panelTimer = Timer(const Duration(milliseconds: 900), () {
+      if (mounted) setState(() => panelsAway = false);
+    });
+  }
+
+  Widget slidingPanel(Widget child, double direction) => AnimatedSlide(
+    offset: panelsAway ? Offset(direction * .5, 0) : Offset.zero,
+    duration: MediaQuery.of(context).disableAnimations
+        ? Duration.zero : const Duration(milliseconds: 260),
+    curve: Curves.easeOutCubic,
+    child: child);
+
+  Future<void> searchDemoDriver() async {
+    if (road == null || saving) return;
+    final fare = road!.fare;
+    final candidates = matchDemoDrivers(
+      gender: pets ? 'Без разницы' : gender, passengers: passengers,
+      wheelchair: wheelchair, pets: pets);
+    setState(() => saving = true);
+    try {
+      await showDialog<void>(context: context, barrierDismissible: false,
+        builder: (_) => DemoDriverSearch(candidates: candidates, fare: fare));
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
 
   @override
   void dispose() {
-    routeTimer?.cancel(); addresses.close(); router.close(); transit.close();
+    panelTimer?.cancel(); routeTimer?.cancel(); addresses.close(); router.close(); transit.close();
     map.dispose(); fromText.dispose(); toText.dispose(); super.dispose();
   }
   String meters(double value) => value < 1000 ? '${value.round()} м' : '${(value / 1000).toStringAsFixed(1)} км';
@@ -114,7 +147,9 @@ class _HomeScreenState extends State<HomeScreen> {
     scheduleRoute();
   }
   void changeMode(TravelMode value) {
-    setState(() { mode = value; categories = false; clearRoute(); });
+    setState(() { mode = value; categories = false;
+      if (value == TravelMode.delivery || pets) gender = 'Без разницы';
+      clearRoute(); });
     scheduleRoute();
   }
   Future<void> search({bool reverse = false}) async {
@@ -217,7 +252,7 @@ class _HomeScreenState extends State<HomeScreen> {
       'meters': road!.meters, 'fareKzt': road!.fare,
       'wheelchair': mode == TravelMode.delivery ? false : wheelchair,
       'pets': mode == TravelMode.delivery ? false : pets,
-      'driverGenderPreference': mode == TravelMode.delivery ? 'Без разницы' : gender,
+      'driverGenderPreference': mode == TravelMode.delivery || pets ? 'Без разницы' : gender,
       'passengers': mode == TravelMode.delivery ? 0 : passengers,
       'status': 'local_demo_draft',
     };
@@ -244,7 +279,9 @@ class _HomeScreenState extends State<HomeScreen> {
       final wide = box.maxWidth >= 1050;
       return Stack(children: [
         FlutterMap(mapController: map, options: MapOptions(initialCenter: aktobe, initialZoom: 13,
-          minZoom: 3, maxZoom: 19, onTap: (_, p) => choosePlace(Place('Точка: ${coordinates(p)}', p), move: false)),
+          minZoom: 3, maxZoom: 19,
+          onPositionChanged: (_, hasGesture) { if (hasGesture) mapGesture(); },
+          onTap: (_, p) => choosePlace(Place('Точка: ${coordinates(p)}', p), move: false)),
           children: [
             TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'kz.intermove.student_prototype'),
@@ -279,11 +316,12 @@ class _HomeScreenState extends State<HomeScreen> {
           width: wide ? 350 : box.maxWidth - 32,
           child: SafeArea(child: ConstrainedBox(constraints: BoxConstraints(
             maxHeight: wide ? box.maxHeight - 70 : box.maxHeight * .34),
-            child: surface(searchPanel())))),
-        Positioned(left: wide ? 390 : 16, right: 16, bottom: 38,
+            child: slidingPanel(surface(searchPanel()), -1)))),
+        Positioned(right: 16, bottom: 38,
+          width: wide ? (box.maxWidth - 420).clamp(360.0, 660.0).toDouble() : box.maxWidth - 32,
           child: SafeArea(top: false, child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: box.maxHeight * (wide ? .58 : .43)),
-            child: surface(transportPanel())))),
+            constraints: BoxConstraints(maxHeight: box.maxHeight * (wide ? .48 : .40)),
+            child: slidingPanel(surface(transportPanel()), 1)))),
         Positioned(right: 16, top: wide ? 88 : box.maxHeight * .48,
           child: Column(children: [
             control('Приблизить', Icons.add, () => zoom(1)),
@@ -298,7 +336,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget surface(Widget child) => Card(margin: EdgeInsets.zero, color: Colors.white,
     surfaceTintColor: Colors.transparent, elevation: 7,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-    child: SingleChildScrollView(padding: const EdgeInsets.all(18), child: child));
+    child: SingleChildScrollView(padding: const EdgeInsets.all(14), child: child));
   Widget control(String title, IconData icon, VoidCallback action) => Material(
     color: Colors.white, elevation: 2, borderRadius: BorderRadius.circular(14),
     child: IconButton(tooltip: title, onPressed: action, icon: Icon(icon)));
@@ -362,12 +400,12 @@ class _HomeScreenState extends State<HomeScreen> {
       endpoints ? 'Выбери вид поездки. По умолчанию рассчитывается такси.' : 'Сначала выбери A и B на карте или через поиск.',
       style: const TextStyle(color: Colors.black54))),
   ]);
-  Widget categoryCards() => SizedBox(key: const ValueKey('categories'), height: 112,
+  Widget categoryCards() => SizedBox(key: const ValueKey('categories'), height: 100,
     child: ListView.separated(scrollDirection: Axis.horizontal,
       itemCount: TravelMode.values.length, separatorBuilder: (_, index) => const SizedBox(width: 10),
       itemBuilder: (_, i) {
         final item = TravelMode.values[i];
-        return SizedBox(width: 138, child: Material(color: const Color(0xFFF1F5FF),
+        return SizedBox(width: 120, child: Material(color: const Color(0xFFF1F5FF),
           borderRadius: BorderRadius.circular(18), child: InkWell(borderRadius: BorderRadius.circular(18),
             onTap: () => changeMode(item), child: Padding(padding: const EdgeInsets.all(12), child: Column(
               mainAxisAlignment: MainAxisAlignment.center, children: [Icon(modeIcon(item), size: 30,
@@ -387,22 +425,34 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mode == TravelMode.delivery) return const Text('Доставка на автомобиле · учебный тариф 350 ₸ / 500 м.');
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       if (mode == TravelMode.intercity) const Text('Междугородняя поездка на автомобиле'),
-      SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Нужна перевозка в коляске'),
-        subtitle: const Text('Спецавтомобиль с доступной посадкой'), value: wheelchair,
-        onChanged: (v) => setState(() => wheelchair = v)),
-      SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Поездка с животным'),
-        value: pets, onChanged: (v) => setState(() => pets = v)),
-      Text(wheelchair && pets ? 'Спецтакси: коляска + животное' : wheelchair ? 'Спецтакси для коляски'
-        : pets ? 'Такси, принимающее животных' : 'Стандартное такси', style: const TextStyle(fontWeight: FontWeight.bold)),
-      const SizedBox(height: 10),
-      const Text('Предпочтение по водителю'),
-      Wrap(spacing: 8, children: ['Без разницы', 'Женщина', 'Мужчина'].map((value) => ChoiceChip(
-        label: Text(value), selected: gender == value, onSelected: (_) => setState(() => gender = value))).toList()),
-      if (mode == TravelMode.intercity) Row(children: [const Text('Пассажиры: '),
-        DropdownButton<int>(value: passengers, items: [1, 2, 3, 4].map((n) => DropdownMenuItem(value: n, child: Text('$n'))).toList(),
-          onChanged: (v) => setState(() => passengers = v ?? 1))]),
-      const Text('Пожелания сохраняются в заявке; наличие подходящего водителя пока не проверяется.',
-        style: TextStyle(fontSize: 12, color: Colors.black54)),
+      Text(wheelchair && pets ? 'Коляска + животное' : wheelchair ? 'Перевозка в коляске'
+        : pets ? 'С животным' : 'Стандартная поездка'),
+      ExpansionTile(key: ValueKey('options-${mode.name}'), tilePadding: EdgeInsets.zero,
+        title: const Text('Дополнительные параметры'),
+        children: [
+          SwitchListTile(contentPadding: EdgeInsets.zero,
+            title: const Text('Перевозка в коляске'), value: wheelchair,
+            onChanged: (v) => setState(() => wheelchair = v)),
+          SwitchListTile(contentPadding: EdgeInsets.zero,
+            title: const Text('Поездка с животным'), value: pets,
+            onChanged: (v) => setState(() {
+              pets = v; if (v) gender = 'Без разницы';
+            })),
+          if (!pets) ...[
+            const Text('Предпочтение по водителю'),
+            Wrap(spacing: 8, children: ['Без разницы', 'Женщина', 'Мужчина']
+              .map((v) => ChoiceChip(label: Text(v), selected: gender == v,
+                onSelected: (_) => setState(() => gender = v))).toList()),
+          ],
+          Row(children: [const Text('Пассажиры: '),
+            DropdownButton<int>(value: passengers,
+              items: [1, 2, 3, 4].map((n) => DropdownMenuItem(value: n,
+                child: Text('$n'))).toList(),
+              onChanged: (v) => setState(() => passengers = v ?? 1))]),
+          const Text('Доступность проверяется только по вымышленным водителям. '
+            'Полная проверка доступности маршрута появится на следующем этапе.',
+            style: TextStyle(fontSize: 12)),
+        ]),
     ]);
   }
 
@@ -414,15 +464,17 @@ class _HomeScreenState extends State<HomeScreen> {
       Wrap(spacing: 18, runSpacing: 8, children: [
         Text(meters(road!.meters), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
         Text('≈ ${minutes(road!.seconds)}', style: const TextStyle(fontSize: 22)),
-        Text(paid ? '${road!.fare} ₸' : 'Без тарифа', style: const TextStyle(fontSize: 22, color: Color(0xFF246BFD))),
+        Text(paid ? '${road!.fare.toStringAsFixed(2)} ₸' : 'Без тарифа', style: const TextStyle(fontSize: 22, color: Color(0xFF246BFD))),
       ]),
       const Text('Оценка времени без текущих пробок.', style: TextStyle(fontSize: 12, color: Colors.black54)),
-      if (paid) const Text('350 ₸ за каждые начатые 500 м. Доплаты пока не заданы.', style: TextStyle(fontSize: 12)),
+      if (paid) const Text('0,70 ₸ за метр (350 ₸ / 500 м). Без доплат.', style: TextStyle(fontSize: 12)),
       if (mode == TravelMode.active) const Text('Учитываются доступные пути выбранного режима по данным карты.', style: TextStyle(fontSize: 12)),
       if (paid) Padding(padding: const EdgeInsets.only(top: 12), child: FilledButton.icon(
-        onPressed: widget.store == null || saving ? null : saveDraft, icon: const Icon(Icons.check),
-        label: Text(saving ? 'Сохраняем…' : 'Сохранить заявку · демо'))),
-      if (paid && widget.store == null) const Text('Локальная база недоступна: сохранить заявку нельзя.'),
+        onPressed: saving ? null : mode == TravelMode.delivery
+          ? (widget.store == null ? null : saveDraft) : searchDemoDriver, icon: const Icon(Icons.check),
+        label: Text(saving ? 'Подождите…' : mode == TravelMode.delivery
+          ? 'Сохранить заявку · демо' : 'Найти водителя · демо'))),
+      if (mode == TravelMode.delivery && widget.store == null) const Text('Локальная база недоступна: сохранить заявку нельзя.'),
     ],
     if (isTransit(mode)) ...[
       ...transitOptions.map((option) => ListTile(contentPadding: EdgeInsets.zero,

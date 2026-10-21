@@ -7,14 +7,14 @@ enum TravelMode { taxi, bus, rail, intercity, delivery, active }
 String modeLabel(TravelMode mode) => switch (mode) {
   TravelMode.taxi => 'Обычное такси', TravelMode.bus => 'Автобусы',
   TravelMode.rail => 'Трамвай / метро', TravelMode.intercity => 'Межгород',
-  TravelMode.delivery => 'Доставка', TravelMode.active => 'маршрут пешком / на велосипеде',
+  TravelMode.delivery => 'Доставка', TravelMode.active => 'Пешком / велосипед',
 };
 String routeProfile(TravelMode mode, bool cycling) => mode == TravelMode.active
     ? (cycling ? 'cycling-regular' : 'foot-walking') : 'driving-car';
 bool isTransit(TravelMode mode) => mode == TravelMode.bus || mode == TravelMode.rail;
-int fareForMeters(double meters) {
+double fareForMeters(double meters) {
   if (!meters.isFinite || meters < 0) throw ArgumentError('Invalid distance');
-  return (meters / 500).ceil() * 350;
+  return (meters * 70).round() / 100;
 }
 
 class RoadRoute {
@@ -23,7 +23,7 @@ class RoadRoute {
   final double seconds;
   final String profile;
   const RoadRoute(this.points, this.meters, this.seconds, this.profile);
-  int get fare => fareForMeters(meters);
+  double get fare => fareForMeters(meters);
 }
 
 RoadRoute parseRoute(Map<String, dynamic> data, String profile) {

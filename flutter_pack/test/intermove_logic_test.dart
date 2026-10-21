@@ -5,13 +5,13 @@ import '../lib/route_service.dart';
 import '../lib/transit_service.dart';
 
 void main() {
-  test('Fare boundaries: each started 500 m costs 350 KZT', () {
+  test('Proportional fare rounded to two decimals', () {
     expect(fareForMeters(0), 0);
-    expect(fareForMeters(1), 350);
+    expect(fareForMeters(1), 0.7);
     expect(fareForMeters(500), 350);
-    expect(fareForMeters(500.1), 700);
+    expect(fareForMeters(500.1), 350.07);
     expect(fareForMeters(1000), 700);
-    expect(fareForMeters(1001), 1050);
+    expect(fareForMeters(1001), 700.7);
     expect(() => fareForMeters(-1), throwsArgumentError);
     expect(() => fareForMeters(double.nan), throwsArgumentError);
   });
@@ -36,7 +36,7 @@ void main() {
       'properties': {'summary': {'distance': 1501.0, 'duration': 240.0}}
     }]}, 'driving-car');
     expect(route.meters, 1501);
-    expect(route.fare, 1400);
+    expect(route.fare, 1050.7);
     expect(route.points.first.latitude, 50.2);
     expect(() => parseRoute({'features': []}, 'driving-car'), throwsFormatException);
   });
