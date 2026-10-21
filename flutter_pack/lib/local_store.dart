@@ -37,6 +37,14 @@ class LocalStore {
     return LocalStore._(db);
   }
 
+  int saveDraft(int? userId, Map<String, dynamic> payload) {
+    db.execute('CREATE TABLE IF NOT EXISTS trip_drafts ('
+      'id INTEGER PRIMARY KEY, user_id INTEGER, created_at TEXT NOT NULL, payload TEXT NOT NULL)');
+    db.execute('INSERT INTO trip_drafts(user_id, created_at, payload) VALUES (?, ?, ?)',
+      [userId, DateTime.now().toUtc().toIso8601String(), jsonEncode(payload)]);
+    return db.lastInsertRowId;
+  }
+
   Future<Account> register(String name, String login, String password) async {
     final normalized = login.trim().toLowerCase();
     if (db.select('SELECT id FROM users WHERE login = ?', [normalized]).isNotEmpty) {
