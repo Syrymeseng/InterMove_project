@@ -10,7 +10,14 @@ class Account {
   final int id;
   final String name;
   final String login;
-  const Account(this.id, this.name, this.login);
+  final String role;
+  final Map<String, dynamic> preferences;
+  const Account(this.id, this.name, this.login,
+    {this.role = 'passenger', this.preferences = const {}});
+  factory Account.fromJson(Map<String, dynamic> json) => Account(
+    json['id'] as int, json['name'] as String, json['email'] as String,
+    role: json['role'] as String,
+    preferences: Map<String, dynamic>.from(json['preferences'] as Map));
 }
 
 // Runs expensive password derivation off the UI isolate.
@@ -35,6 +42,16 @@ class LocalStore {
       login TEXT NOT NULL UNIQUE, salt TEXT NOT NULL, hash TEXT NOT NULL
     )''');
     return LocalStore._(db);
+  }
+
+  String? setting(String key) {
+    db.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    final rows = db.select('SELECT value FROM settings WHERE key=?', [key]);
+    return rows.isEmpty ? null : rows.first['value'] as String;
+  }
+  void saveSetting(String key, String value) {
+    db.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    db.execute('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', [key,value]);
   }
 
   int saveDraft(int? userId, Map<String, dynamic> payload) {

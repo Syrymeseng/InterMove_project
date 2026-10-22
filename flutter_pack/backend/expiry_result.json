@@ -1,0 +1,5 @@
+{
+  "backgroundExpirySeconds": 15.036696307999591,
+  "under60Seconds": true,
+  "method": "real server process; direct DB observation; no API cleanup requests"
+}

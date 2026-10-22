@@ -5,6 +5,17 @@ import '../lib/route_service.dart';
 import '../lib/transit_service.dart';
 
 void main() {
+  test('Reverse geocoding keeps clicked coordinates and excludes distant or generic results', () {
+    const tapped = LatLng(50.2839, 57.1670);
+    const close = Place('Street 5', LatLng(50.2840, 57.1670), usableForReverse: true);
+    const far = Place('Distant street', LatLng(51, 58), usableForReverse: true);
+    const city = Place('Aktobe', tapped);
+    expect(nearbyAddress([city, far], tapped), isNull);
+    final selected = nearbyAddress([far, close, city], tapped)!;
+    expect(selected.name, 'Street 5');
+    expect(selected.point, tapped);
+    expect(nearbyAddress([], tapped), isNull);
+  });
   test('Proportional fare rounded to two decimals', () {
     expect(fareForMeters(0), 0);
     expect(fareForMeters(1), 0.7);

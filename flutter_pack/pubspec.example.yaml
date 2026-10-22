@@ -1,0 +1,22 @@
+# Reference only. Merge dependencies into your existing pubspec.yaml; keep your project name/assets.
+name: intermove_v08
+publish_to: none
+version: 0.8.0+8
+environment:
+  sdk: '>=3.9.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_map: ^8.2.2
+  latlong2: ^0.9.1
+  url_launcher: ^6.3.2
+  http: ^1.5.0
+  path: ^1.9.1
+  path_provider: ^2.1.5
+  cryptography: ^2.7.0
+  sqlite3: ^3.7.1
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+flutter:
+  uses-material-design: true

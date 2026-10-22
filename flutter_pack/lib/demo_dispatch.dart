@@ -31,7 +31,8 @@ List<DemoDriver> matchDemoDrivers({required String gender,
 class DemoDriverSearch extends StatefulWidget {
   final List<DemoDriver> candidates;
   final double fare;
-  const DemoDriverSearch({super.key, required this.candidates, required this.fare});
+  final Future<void> Function(DemoDriver)? onOrder;
+  const DemoDriverSearch({super.key, required this.candidates, required this.fare,this.onOrder});
   @override
   State<DemoDriverSearch> createState() => _DemoDriverSearchState();
 }
@@ -39,6 +40,15 @@ class DemoDriverSearch extends StatefulWidget {
 class _DemoDriverSearchState extends State<DemoDriverSearch> {
   Timer? timer;
   int tick = 0;
+  bool sending=false, ordered=false;
+  String? orderError;
+  Future<void> order(DemoDriver driver) async {
+    if(sending || ordered)return;
+    setState((){sending=true;orderError=null;});
+    try {await widget.onOrder!(driver);if(mounted)setState(()=>ordered=true);}
+    catch(e){if(mounted)setState(()=>orderError=e is FormatException?e.message:"Не удалось сохранить. Повторите запрос.");}
+    finally{if(mounted)setState(()=>sending=false);}
+  }
   bool get done => tick >= 5;
   @override
   void initState() {
@@ -79,9 +89,12 @@ class _DemoDriverSearchState extends State<DemoDriverSearch> {
               'Выбранные требования сохранены.'),
           const SizedBox(height: 16),
           Text('Расчёт: ${widget.fare.toStringAsFixed(2)} ₸'),
-          const Text('Бронирование и оплата ещё не выполняются.'),
+          Text(ordered?'ДЕМО-заказ сохранён в истории такси. Реальная машина не вызвана.':'Это симуляция: реальная бронь и оплата не выполняются.'),
+          if(orderError!=null) Semantics(liveRegion:true,child:Text(orderError!)),
         ]))),
-      actions: [TextButton(onPressed: () => Navigator.pop(context),
+      actions: [
+        if(done && driver!=null && widget.onOrder!=null) FilledButton(onPressed:sending || ordered?null:()=>order(driver),child:Text(ordered?'Сохранено':'Оформить ДЕМО-такси')),
+        TextButton(onPressed: sending?null:() => Navigator.pop(context),
         child: Text(done ? 'Вернуться к маршруту' : 'Отменить поиск'))],
     );
   }

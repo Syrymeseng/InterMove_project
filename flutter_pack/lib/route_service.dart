@@ -6,7 +6,7 @@ import 'app_config.dart';
 enum TravelMode { taxi, bus, rail, intercity, delivery, active }
 String modeLabel(TravelMode mode) => switch (mode) {
   TravelMode.taxi => 'Обычное такси', TravelMode.bus => 'Автобусы',
-  TravelMode.rail => 'Трамвай / метро', TravelMode.intercity => 'Межгород',
+  TravelMode.rail => 'Поезда', TravelMode.intercity => 'Межгород',
   TravelMode.delivery => 'Доставка', TravelMode.active => 'Пешком / велосипед',
 };
 String routeProfile(TravelMode mode, bool cycling) => mode == TravelMode.active

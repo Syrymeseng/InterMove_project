@@ -1,0 +1,38 @@
+test_completed_rating_favourite_notification_read (test_journeys.ExtraIntegrityTests.test_completed_rating_favourite_notification_read) ... ok
+test_overlapping_taxi_slots_for_same_vehicle (test_journeys.ExtraIntegrityTests.test_overlapping_taxi_slots_for_same_vehicle) ... ok
+test_unknown_access_change_invalidates_existing_booking (test_journeys.ExtraIntegrityTests.test_unknown_access_change_invalidates_existing_booking) ... ok
+test_booking_privacy_refund_notifications_and_restart (test_journeys.JourneysTests.test_booking_privacy_refund_notifications_and_restart) ... ok
+test_disruption_partial_refund_and_rating (test_journeys.JourneysTests.test_disruption_partial_refund_and_rating) ... ok
+test_failure_timeout_expiry_and_reversal_release_all (test_journeys.JourneysTests.test_failure_timeout_expiry_and_reversal_release_all) ... ok
+test_last_seat_race_and_payment_idempotency (test_journeys.JourneysTests.test_last_seat_race_and_payment_idempotency) ... ok
+test_multimodal_transfer_no_match_and_sort (test_journeys.JourneysTests.test_multimodal_transfer_no_match_and_sort) ... ok
+test_operator_ownership_and_parcel_limits (test_journeys.JourneysTests.test_operator_ownership_and_parcel_limits) ... ok
+test_price_reconfirmation_change_at_payment_and_guest_denied (test_journeys.JourneysTests.test_price_reconfirmation_change_at_payment_and_guest_denied) ... ok
+test_replacement_failure_keeps_original_and_success_refunds (test_journeys.JourneysTests.test_replacement_failure_keeps_original_and_success_refunds) ... ok
+test_admin_only_summary_and_no_plaintext_password (test_server.ApiTests.test_admin_only_summary_and_no_plaintext_password) ... ok
+test_concurrent_duplicate_registration (test_server.ApiTests.test_concurrent_duplicate_registration) ... ok
+test_five_failed_logins_restrict_retry_and_expire (test_server.ApiTests.test_five_failed_logins_restrict_retry_and_expire) ... ok
+test_registration_validation_duplicate_and_no_role_escalation (test_server.ApiTests.test_registration_validation_duplicate_and_no_role_escalation) ... ok
+test_sessions_profile_ownership_persistence_and_logout (test_server.ApiTests.test_sessions_profile_ownership_persistence_and_logout) ... ok
+test_https_with_certificate_validation (test_transport.TransportTests.test_https_with_certificate_validation) ... ok
+test_access_unknown_does_not_relax_requirements (test_urban_osm.UrbanTests.test_access_unknown_does_not_relax_requirements) ... ok
+test_directed_route_and_no_fictitious_reverse (test_urban_osm.UrbanTests.test_directed_route_and_no_fictitious_reverse) ... ok
+test_invalid_coordinates_rejected (test_urban_osm.UrbanTests.test_invalid_coordinates_rejected) ... ok
+test_normalize_preserves_order_and_roles (test_urban_osm.UrbanTests.test_normalize_preserves_order_and_roles) ... ok
+test_real_snapshot_and_public_endpoint_are_read_only (test_urban_osm.UrbanTests.test_real_snapshot_and_public_endpoint_are_read_only) ... ok
+test_single_transfer_and_entry_exit_rules (test_urban_osm.UrbanTests.test_single_transfer_and_entry_exit_rules) ... ok
+test_stale_cache_survives_network_failure (test_urban_osm.UrbanTests.test_stale_cache_survives_network_failure) ... ok
+test_additive_upgrade_preserves_v6_booking (test_v7.V7Tests.test_additive_upgrade_preserves_v6_booking) ... ok
+test_demo_history_is_private_and_retry_safe (test_v7.V7Tests.test_demo_history_is_private_and_retry_safe) ... ok
+test_driver_response_is_authorized_and_idempotent (test_v7.V7Tests.test_driver_response_is_authorized_and_idempotent) ... ok
+test_favourite_online_transition_and_request (test_v7.V7Tests.test_favourite_online_transition_and_request) ... ok
+test_intercity_modes_and_coordinates (test_v7.V7Tests.test_intercity_modes_and_coordinates) ... ok
+test_only_taxi_legs_enter_history (test_v7.V7Tests.test_only_taxi_legs_enter_history) ... ok
+test_optional_metro_and_astana_alternatives (test_v7.V7Tests.test_optional_metro_and_astana_alternatives) ... ok
+test_presence_permissions_and_request_isolation (test_v7.V7Tests.test_presence_permissions_and_request_isolation) ... ok
+test_restart_does_not_reseed_or_lose_bookings (test_v7.V7Tests.test_restart_does_not_reseed_or_lose_bookings) ... ok
+
+----------------------------------------------------------------------
+Ran 33 tests in 20.507s
+
+OK

@@ -9,6 +9,9 @@ import 'profile_panel.dart';
 import 'route_service.dart';
 import 'transit_service.dart';
 import 'demo_dispatch.dart';
+import 'auth_service.dart';
+import 'journey_hub.dart';
+import 'urban_transport.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,6 +26,9 @@ class InterMoveApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     title: 'InterMove', debugShowCheckedModeBanner: false,
     theme: ThemeData(useMaterial3: true,
+      textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(minimumSize: const Size(48,48))),
+      outlinedButtonTheme: OutlinedButtonThemeData(style: OutlinedButton.styleFrom(minimumSize: const Size(48,48))),
+      filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(minimumSize: const Size(48,48))),
       colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF246BFD)),
       inputDecorationTheme: InputDecorationTheme(filled: true,
         fillColor: const Color(0xFFF3F5F9),
@@ -44,7 +50,11 @@ class _HomeScreenState extends State<HomeScreen> {
   final transit = TransitService();
   final fromText = TextEditingController();
   final toText = TextEditingController();
-  Account? account;
+  late final AuthService auth = AuthService(widget.store, onSessionExpired: () {
+    if (mounted) setState(() => account = null);
+  });
+  Account? get account => auth.account;
+  set account(Account? value) => auth.account = value;
   Place? from;
   Place? to;
   bool selectingFrom = true;
@@ -74,6 +84,27 @@ class _HomeScreenState extends State<HomeScreen> {
   bool saving = false;
   bool panelsAway = false;
   Timer? panelTimer;
+  final Map<bool, Timer> reverseTimers = {};
+
+  void chooseMapPoint(LatLng point) {
+    final start = selectingFrom;
+    final selected = Place('Точка: ${coordinates(point)}', point);
+    choosePlace(selected, move: false);
+    reverseTimers[start]?.cancel();
+    reverseTimers[start] = Timer(const Duration(milliseconds: 550), () async {
+      try {
+        if (!mounted || !identical(start ? from : to, selected)) return;
+        final matches = await addresses.reverse(point);
+        if (!mounted || !identical(start ? from : to, selected)) return;
+        final resolved = nearbyAddress(matches, point);
+        if (resolved == null) return;
+        setState(() {
+          if (start) { from = resolved; fromText.text = resolved.name; }
+          else { to = resolved; toText.text = resolved.name; }
+        });
+      } catch (_) { /* Keep the selected coordinates on failure. */ }
+    });
+  }
 
   void mapGesture() {
     panelTimer?.cancel();
@@ -92,6 +123,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> searchDemoDriver() async {
     if (road == null || saving) return;
+    if(!auth.remote || account==null) {
+      await openBookings('taxi','Profile');
+      return;
+    }
+    final orderKey=requestKey();
+    final meters=road!.meters;
+    final originName=from!.name, destinationName=to!.name;
     final fare = road!.fare;
     final candidates = matchDemoDrivers(
       gender: pets ? 'Без разницы' : gender, passengers: passengers,
@@ -99,7 +137,11 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => saving = true);
     try {
       await showDialog<void>(context: context, barrierDismissible: false,
-        builder: (_) => DemoDriverSearch(candidates: candidates, fare: fare));
+        builder: (_) => DemoDriverSearch(candidates: candidates, fare: fare,onOrder:(driver) async {
+          await auth.api('POST','/taxi/demo-order',{'requestKey':orderKey,'driverId':101+demoDrivers.indexOf(driver),
+            'origin':originName,'destination':destinationName,'meters':meters,'passengers':passengers,
+            'wheelchair':wheelchair,'pets':pets});
+        }));
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -107,8 +149,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    for (final timer in reverseTimers.values) { timer.cancel(); }
     panelTimer?.cancel(); routeTimer?.cancel(); addresses.close(); router.close(); transit.close();
-    map.dispose(); fromText.dispose(); toText.dispose(); super.dispose();
+    auth.close(); map.dispose(); fromText.dispose(); toText.dispose(); super.dispose();
   }
   String meters(double value) => value < 1000 ? '${value.round()} м' : '${(value / 1000).toStringAsFixed(1)} км';
   String minutes(double value) => '${(value / 60).ceil()} мин';
@@ -146,7 +189,20 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     scheduleRoute();
   }
+  Future<void> openBookings([String initialMode = 'All modes', String initialPage = 'Search']) async {
+    await Navigator.push<void>(context, MaterialPageRoute(builder: (_) => JourneyHub(
+      store: widget.store, sharedAuth: auth, initialMode: initialMode, initialPage:initialPage)));
+    if (mounted) setState(() {});
+  }
   void changeMode(TravelMode value) {
+    if(value==TravelMode.bus){
+      Navigator.push<void>(context,MaterialPageRoute(builder:(_)=>UrbanTransportPage(auth:auth,from:from?.point,to:to?.point)));
+      return;
+    }
+    if (value == TravelMode.bus || value == TravelMode.rail || value == TravelMode.intercity) {
+      openBookings(value == TravelMode.bus ? 'city_bus' : value == TravelMode.rail ? 'train' : 'intercity_bus');
+      return;
+    }
     setState(() { mode = value; categories = false;
       if (value == TravelMode.delivery || pets) gender = 'Без разницы';
       clearRoute(); });
@@ -238,7 +294,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> settings() async {
-    final key = await showDialog<String>(context: context, builder: (_) => RoutingSettings(initial: router.apiKey));
+    final key = await showDialog<String>(context: context, builder: (_) => RoutingSettings(initial: router.apiKey, auth: auth));
     if (!mounted || key == null) return;
     setState(() { router.apiKey = key; clearRoute(); });
     scheduleRoute();
@@ -273,7 +329,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) => Scaffold(
     key: scaffoldKey,
     endDrawer: Drawer(width: MediaQuery.sizeOf(context).width > 440 ? 400 : MediaQuery.sizeOf(context).width * .94,
-      child: ProfilePanel(store: widget.store, account: account,
+      child: ProfilePanel(auth: auth, account: account,
         onAccountChanged: (value) => setState(() => account = value))),
     body: LayoutBuilder(builder: (context, box) {
       final wide = box.maxWidth >= 1050;
@@ -281,7 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
         FlutterMap(mapController: map, options: MapOptions(initialCenter: aktobe, initialZoom: 13,
           minZoom: 3, maxZoom: 19,
           onPositionChanged: (_, hasGesture) { if (hasGesture) mapGesture(); },
-          onTap: (_, p) => choosePlace(Place('Точка: ${coordinates(p)}', p), move: false)),
+          onTap: (_, p) => chooseMapPoint(p)),
           children: [
             TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'kz.intermove.student_prototype'),
@@ -306,9 +362,12 @@ class _HomeScreenState extends State<HomeScreen> {
               TextSourceAttribution('Routing: openrouteservice / HeiGIT', onTap: () => launchUrl(Uri.parse('https://openrouteservice.org/'))),
             ]),
           ]),
-        Positioned(top: 16, right: 16, child: SafeArea(child: Wrap(spacing: 8, children: [
+        Positioned(top: 16, right: 16, left:wide ? 390 : 16, child: SafeArea(child: Wrap(alignment:WrapAlignment.end,spacing: 8, children: [
+          control('История такси', Icons.local_taxi_outlined, () => openBookings('All modes','Drivers')),
+          control('Уведомления', Icons.notifications_outlined, () => openBookings('All modes','Notifications')),
+          control('Билеты и поездки / Book journeys', Icons.confirmation_number_outlined, () => openBookings()),
           control('Поиск', Icons.search, () => setState(() => searchVisible = !searchVisible)),
-          control('Ключ маршрутов', Icons.settings_outlined, settings),
+          control('Настройки', Icons.settings_outlined, settings),
           control('Профиль', account == null ? Icons.person_outline : Icons.person,
             () => scaffoldKey.currentState?.openEndDrawer()),
         ]))),
@@ -341,9 +400,17 @@ class _HomeScreenState extends State<HomeScreen> {
     color: Colors.white, elevation: 2, borderRadius: BorderRadius.circular(14),
     child: IconButton(tooltip: title, onPressed: action, icon: Icon(icon)));
   void zoom(double delta) => map.move(map.camera.center, (map.camera.zoom + delta).clamp(3.0, 19.0).toDouble());
-  Marker marker(LatLng p, String label, String title, Color color) => Marker(point: p, width: 38, height: 38,
-    child: Tooltip(message: title, child: CircleAvatar(backgroundColor: color,
-      child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))));
+  Marker marker(LatLng p, String label, String title, Color color) {
+    var style = 'pin';
+    try { style = widget.store?.setting('marker') ?? 'pin'; } catch (_) {}
+    return Marker(point: p, width: 48, height: 48,
+      child: Semantics(label: title, child: Tooltip(message: title,
+        child: Container(alignment: Alignment.center,
+          decoration: BoxDecoration(color: color,
+            borderRadius: BorderRadius.circular(style == 'circle' ? 24 : style == 'flag' ? 2 : 12),
+            border: Border.all(color: Colors.white, width: 2)),
+          child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))))));
+  }
 
   Widget searchPanel() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
     Row(children: [const Icon(Icons.explore, color: Color(0xFF246BFD)), const SizedBox(width: 8),
@@ -380,7 +447,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   IconData modeIcon(TravelMode value) => switch(value) {
     TravelMode.taxi => Icons.local_taxi, TravelMode.bus => Icons.directions_bus,
-    TravelMode.rail => Icons.tram, TravelMode.intercity => Icons.add_road,
+    TravelMode.rail => Icons.train, TravelMode.intercity => Icons.add_road,
     TravelMode.delivery => Icons.local_shipping_outlined, TravelMode.active => Icons.directions_walk,
   };
   Widget transportPanel() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -400,7 +467,7 @@ class _HomeScreenState extends State<HomeScreen> {
       endpoints ? 'Выбери вид поездки. По умолчанию рассчитывается такси.' : 'Сначала выбери A и B на карте или через поиск.',
       style: const TextStyle(color: Colors.black54))),
   ]);
-  Widget categoryCards() => SizedBox(key: const ValueKey('categories'), height: 100,
+  Widget categoryCards() => SizedBox(key: const ValueKey('categories'), height: 100 + (MediaQuery.textScalerOf(context).scale(14) - 14).clamp(0, 56) * 4,
     child: ListView.separated(scrollDirection: Axis.horizontal,
       itemCount: TravelMode.values.length, separatorBuilder: (_, index) => const SizedBox(width: 10),
       itemBuilder: (_, i) {
@@ -501,20 +568,39 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class RoutingSettings extends StatefulWidget {
   final String initial;
-  const RoutingSettings({super.key, required this.initial});
+  final AuthService auth;
+  const RoutingSettings({super.key, required this.initial, required this.auth});
   @override
   State<RoutingSettings> createState() => _RoutingSettingsState();
 }
 class _RoutingSettingsState extends State<RoutingSettings> {
   late final TextEditingController keyText;
+  late final TextEditingController serverText;
+  String? status;
+  bool checking=false;
+  Future<void> check() async {
+    setState((){checking=true;status=null;});
+    try{await widget.auth.checkConnection(serverText.text);if(mounted)setState(()=>status="Сервер доступен.");}
+    catch(_){if(mounted)setState(()=>status="Нет соединения. Запустите Python-сервер и проверьте адрес.");}
+    finally{if(mounted)setState(()=>checking=false);}
+  }
+  void apply(){
+    try{widget.auth.configure(serverText.text);Navigator.pop(context,keyText.text.trim());}
+    catch(e){setState(()=>status=e is FormatException?e.message:"Не удалось сохранить настройки.");}
+  }
   @override
-  void initState() { super.initState(); keyText = TextEditingController(text: widget.initial); }
+  void initState() { super.initState(); keyText = TextEditingController(text: widget.initial);serverText=TextEditingController(text:widget.auth.endpoint); }
   @override
-  void dispose() { keyText.dispose(); super.dispose(); }
+  void dispose() { keyText.dispose();serverText.dispose(); super.dispose(); }
   @override
-  Widget build(BuildContext context) => AlertDialog(title: const Text('Сервисы карты'),
+  Widget build(BuildContext context) => AlertDialog(title: const Text('Настройки приложения'),
     content: SizedBox(width: 390, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start, children: [
+      TextField(controller:serverText,decoration:const InputDecoration(labelText:'Адрес сервера бронирования',hintText:'https://… или http://127.0.0.1:8787')),
+      const Text('На Windows/Mac по умолчанию используется сервер на этом компьютере. Для телефона укажите общий HTTPS. Адрес сохраняется; при смене потребуется войти заново.'),
+      TextButton(onPressed:checking?null:check,child:Text(checking?'Проверяем…':'Проверить соединение')),
+      if(status!=null) Semantics(liveRegion:true,child:Text(status!)),
+      const SizedBox(height:16),
       const Text('Photon: ключ не нужен.\n\nМаршруты: openrouteservice. Ключ можно добавить позже; '
         'карта, профили и поиск адресов работают без него.'),
       const SizedBox(height: 16),
@@ -524,11 +610,12 @@ class _RoutingSettingsState extends State<RoutingSettings> {
       const Text('Ключ из этого окна хранится только до закрытия приложения.'),
       TextButton(onPressed: () => launchUrl(Uri.parse('https://account.heigit.org/')),
         child: const Text('Кабинет openrouteservice')),
-      const Text('Адреса отправляются в Photon, точки маршрута — в openrouteservice, '
-        'область поиска транспорта — в Overpass. Данные профиля остаются на устройстве.',
-        style: TextStyle(fontSize: 12, color: Colors.black54)),
+      Text('Адреса отправляются в Photon, точки маршрута — в openrouteservice, '
+        'область поиска транспорта — в Overpass. '
+        '${widget.auth.remote ? "Профиль хранится на общем сервере." : "Профиль хранится на устройстве."}',
+        style: const TextStyle(fontSize: 12, color: Colors.black54)),
     ]))), actions: [
       TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
-      FilledButton(onPressed: () => Navigator.pop(context, keyText.text.trim()), child: const Text('Применить')),
+      FilledButton(onPressed: checking?null:apply, child: const Text('Применить')),
     ]);
 }

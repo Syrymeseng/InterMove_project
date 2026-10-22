@@ -1,0 +1,8 @@
+# Add these lines to the Flutter project's .gitignore:
+*.sqlite
+*.sqlite-*
+*.pem
+*.key
+backend/__pycache__/
+*.sqlite.osm.json
+*.sqlite.osm.tmp
